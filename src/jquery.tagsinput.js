@@ -73,20 +73,21 @@
     input.css('width', minWidth);
   };
 
-	$.fn.addTag = function(value,options) {
+
+	$.fn.addTag = function(item,options) {
+		
+		    if (!item.hasOwnProperty($(this).data().options.itemValue))
+		    {
+		    	var jsonstr='{"'+$(this).data().options.itemText+'":"'+ item+'","'+$(this).data().options.itemValue+'":"'+ item +'"}';
+		    	item=$.parseJSON(jsonstr);
+		    }
+		    
 			options = jQuery.extend({focus:false,callback:true},options);
 			this.each(function() {
 				var id = $(this).attr('id');
 
-				var tagslist = $(this).val().split(delimiter[id]);
-				if (tagslist[0] == '') {
-					tagslist = new Array();
-				}
-
-				value = jQuery.trim(value);
-
 				if (options.unique) {
-					var skipTag = $(this).tagExist(value);
+					var skipTag = $(this).tagExist(item);
 					if(skipTag == true) {
 					    //Marks fake input as not_valid to let styling it
     				    $('#'+id+'_tag').addClass('not_valid');
@@ -94,20 +95,27 @@
 				} else {
 					var skipTag = false;
 				}
-
-				if (value !='' && skipTag != true) {
-                    $('<span>').addClass('tag').append(
-                        $('<span>').text(value).append('&nbsp;&nbsp;'),
+				
+				var imgtags="";
+            	if ($(this).data().options.showImgValue)
+            	 {            
+            	 	var sSrc=item[$(this).data().options.itemValue];            	 	
+            	 	imgtags="<img src='"+sSrc+"' style='width:100px;height:70px;'><br>";                    
+                 }
+                    	 
+				if (item[$(this).data().options.itemText] !='' && skipTag != true) {
+                    $('<span>').addClass('tag').append(                    	
+                        imgtags,
+                        $('<span>').text(item[$(this).data().options.itemText]).append('&nbsp;&nbsp;'),
                         $('<a>', {
                             href  : '#',
                             title : 'Removing tag',
                             text  : 'x'
                         }).click(function () {
-                            return $('#' + id).removeTag(escape(value));
+                            return $('#' + id).removeTag(item);
                         })
                     ).insertBefore('#' + id + '_addTag');
 
-					tagslist.push(value);
 
 					$('#'+id+'_tag').val('');
 					if (options.focus) {
@@ -116,17 +124,16 @@
 						$('#'+id+'_tag').blur();
 					}
 
-					$.fn.tagsInput.updateTagsField(this,tagslist);
+					$.fn.tagsInput.updateTagsField(this,item);
 
 					if (options.callback && tags_callbacks[id] && tags_callbacks[id]['onAddTag']) {
 						var f = tags_callbacks[id]['onAddTag'];
-						f.call(this, value);
+						f.call(this, item);
 					}
 					if(tags_callbacks[id] && tags_callbacks[id]['onChange'])
 					{
-						var i = tagslist.length;
 						var f = tags_callbacks[id]['onChange'];
-						f.call(this, $(this), tagslist[i-1]);
+						f.call(this, $(this), item);
 					}
 				}
 
@@ -135,44 +142,49 @@
 			return false;
 		};
 
-	$.fn.removeTag = function(value) {
-			value = unescape(value);
-			this.each(function() {
+	$.fn.removeTag = function(item) {
+			this.each(function() {				
 				var id = $(this).attr('id');
-
-				var old = $(this).val().split(delimiter[id]);
-
-				$('#'+id+'_tagsinput .tag').remove();
-				str = '';
-				for (i=0; i< old.length; i++) {
-					if (old[i]!=value) {
-						str = str + delimiter[id] +old[i];
-					}
-				}
-
-				$.fn.tagsInput.importTags(this,str);
+                var arr= $(this).data().objects;                
+                $('#'+id+'_tagsinput .tag').remove();                
+				for (var i = arr.length-1; i >=0 ; i--) {
+				      if (arr[i][$(this).data().options.itemValue]==item[$(this).data().options.itemValue])	
+				      {
+				      	arr.splice(i, 1);
+				      }					
+		        }
+				
+				$.fn.tagsInput.importTags(this,arr);
 
 				if (tags_callbacks[id] && tags_callbacks[id]['onRemoveTag']) {
 					var f = tags_callbacks[id]['onRemoveTag'];
-					f.call(this, value);
-				}
+					f.call(this, item);
+				}				
 			});
 
 			return false;
 		};
 
-	$.fn.tagExist = function(val) {
-		var id = $(this).attr('id');
-		var tagslist = $(this).val().split(delimiter[id]);
-		return (jQuery.inArray(val, tagslist) >= 0); //true when tag exists, false when not
+	$.fn.tagExist = function(item) {	
+		var arr=$(this).data().objects;
+		for (var i = 0; i < arr.length; i++) {
+	      if (arr[i][$(this).data().options.itemValue]==item[$(this).data().options.itemValue])				
+			return true;
+          }
+		return false;
 	};
 
-   // clear all existing tags and import new ones from a string
-   $.fn.importTags = function(str) {
+   // clear all existing tags and import new ones from a json object
+   $.fn.importTags = function(items) {
       var id = $(this).attr('id');
       $('#'+id+'_tagsinput .tag').remove();
-      $.fn.tagsInput.importTags(this,str);
+      $.fn.tagsInput.importTags(this,items);
    }
+   
+   $.fn.Objects=function(){   	
+   	return $(this).data().objects;
+   }
+   
 
 	$.fn.tagsInput = function(options) {
     var settings = jQuery.extend({
@@ -184,7 +196,9 @@
       autocomplete: {selectFirst: false },
       hide:true,
       delimiter: ',',
-      unique:true,
+      itemValue:'value',
+      itemText:'text',
+      showImgValue:false,
       removeWithBackspace:true,
       placeholderColor:'#666666',
       autosize: true,
@@ -202,7 +216,9 @@
 
          // Mark the field as having been initialized
          $(this).attr('data-tagsinput-init', true);
-
+         $(this).data().options=settings;
+		 $(this).data().objects=[];
+		 
 			if (settings.hide) {
 				$(this).hide();
 			}
@@ -271,13 +287,13 @@
 						$(data.fake_input).autocomplete(settings.autocomplete_url, settings.autocomplete);
 						$(data.fake_input).bind('result',data,function(event,data,formatted) {
 							if (data) {
-								$('#'+id).addTag(data[0] + "",{focus:true,unique:(settings.unique)});
+								$('#'+id).addTag(data[0],{focus:true,unique:(settings.unique)}); 
 							}
 					  	});
 					} else if (jQuery.ui.autocomplete !== undefined) {
 						$(data.fake_input).autocomplete(autocomplete_options);
 						$(data.fake_input).bind('autocompleteselect',data,function(event,ui) {
-							$(event.data.real_input).addTag(ui.item.value,{focus:true,unique:(settings.unique)});
+							$(event.data.real_input).addTag(ui.item,{focus:true,unique:(settings.unique)});
 							return false;
 						});
 					}
@@ -318,10 +334,7 @@
 					if(event.keyCode == 8 && $(this).val() == '')
 					{
 						 event.preventDefault();
-						 var last_tag = $(this).closest('.tagsinput').find('.tag:last').text();
-						 var id = $(this).attr('id').replace(/_tag$/, '');
-						 last_tag = last_tag.replace(/[\s]+x$/, '');
-						 $('#' + id).removeTag(escape(last_tag));
+						 $(this).closest('.tagsinput').find('.tag:last').find('a').click();
 						 $(this).trigger('focus');
 					}
 				});
@@ -342,22 +355,28 @@
 
 	};
 
-	$.fn.tagsInput.updateTagsField = function(obj,tagslist) {
+	$.fn.tagsInput.updateTagsField = function(obj,item) {	
+		$(obj).data().objects.push(item);
+		var arr=$(obj).data().objects;
+		var sValue="";
 		var id = $(obj).attr('id');
-		$(obj).val(tagslist.join(delimiter[id]));
-	};
-
-	$.fn.tagsInput.importTags = function(obj,val) {
-		$(obj).val('');
-		var id = $(obj).attr('id');
-		var tags = val.split(delimiter[id]);
-		for (i=0; i<tags.length; i++) {
-			$(obj).addTag(tags[i],{focus:false,callback:false});
+		for (var i=0; i<arr.length; i++) {
+		  if (i==0){
+			  sValue=arr[i][$(obj).data().options.itemValue];
+		  }	else {
+			  sValue+=delimiter[id]+arr[i][$(obj).data().options.itemValue];  
+		  }		
 		}
-		if(tags_callbacks[id] && tags_callbacks[id]['onChange'])
-		{
-			var f = tags_callbacks[id]['onChange'];
-			f.call(obj, obj, tags[i]);
+	   $(obj).val(sValue);
+	};
+	
+	$.fn.tagsInput.importTags = function(obj,items) {		
+		$(obj).data().objects=[];	
+		var id = $(obj).attr('id');
+		if (!jQuery.isArray(items))
+		  items=items.split(delimiter[id]);
+		for (var i=0; i<items.length; i++) {
+		  $(obj).addTag(items[i],{focus:false,callback:false,unique:$(obj).data().options.unique});
 		}
 	};
 
